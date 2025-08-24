@@ -24,18 +24,20 @@ export function Header({ teamName, teamLogoData, currentPage }: HeaderProps) {
     <header className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div className="flex items-center space-x-4">
+          {/* Left side - Title and Dashboard button */}
+          <div className="flex items-center space-x-2 sm:space-x-4">
             <h1 
-              className="text-xl font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+              className="text-lg sm:text-xl font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
               onClick={() => router.push('/dashboard')}
             >
-              Fantasy Football Rush
+              <span className="hidden sm:inline">Fantasy Football Rush</span>
+              <span className="sm:hidden">FF Rush</span>
             </h1>
             <Button
               variant={currentPage === 'dashboard' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => router.push('/dashboard')}
-              className={`flex items-center space-x-2 ${
+              className={`hidden sm:flex items-center space-x-2 ${
                 currentPage === 'dashboard' ? 'shadow-md' : ''
               }`}
             >
@@ -44,13 +46,14 @@ export function Header({ teamName, teamLogoData, currentPage }: HeaderProps) {
             </Button>
           </div>
           
-          <div className="flex items-center space-x-4">
+          {/* Right side - Team and Logout */}
+          <div className="flex items-center space-x-2 sm:space-x-4">
             {teamName && (
               <Button
                 variant={currentPage === 'profile' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => router.push('/profile')}
-                className={`flex items-center space-x-2 ${
+                className={`flex items-center space-x-1 sm:space-x-2 ${
                   currentPage === 'profile' ? 'shadow-md' : ''
                 }`}
               >
@@ -59,17 +62,18 @@ export function Header({ teamName, teamLogoData, currentPage }: HeaderProps) {
                 ) : (
                   <User className="h-4 w-4" />
                 )}
-                <span>{teamName}</span>
+                <span className="hidden sm:inline">{teamName}</span>
+                <span className="sm:hidden text-xs">Team</span>
               </Button>
             )}
             <Button
               variant="outline"
               size="sm"
               onClick={handleLogout}
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-1 sm:space-x-2"
             >
               <LogOut className="h-4 w-4" />
-              <span>Logout</span>
+              <span className="hidden sm:inline">Logout</span>
             </Button>
           </div>
         </div>

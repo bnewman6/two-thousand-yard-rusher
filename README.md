@@ -206,9 +206,9 @@ The app will automatically deploy on every push to main branch.
 - [x] Dashboard UI with current week's picks
 - [x] Weekly pick selection interface
 - [x] Real-time leaderboard
-- [ ] User profile management
-- [ ] 8-bit logo canvas editor
-- [ ] Mobile responsiveness optimization
+- [x] User profile management
+- [x] 8-bit logo canvas editor
+- [x] Mobile responsiveness optimization
 - [ ] Automated weekly yard updates
 - [ ] Email notifications for pick reminders
 

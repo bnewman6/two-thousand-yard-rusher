@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { RunningBack } from '@/types'
+import { Search, X } from 'lucide-react'
 
 interface WeeklyPickSelectorProps {
   onPickSubmitted?: () => void
@@ -22,6 +24,10 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [weekFinalized, setWeekFinalized] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<RunningBack[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showSearchResults, setShowSearchResults] = useState(false)
   const prevWeekSeasonRef = useRef<{ week: number; season: number } | null>(null)
 
   // Single useEffect to handle all state updates and data fetching
@@ -152,6 +158,45 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
     }
   }
 
+  const searchRunningBacks = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([])
+      setShowSearchResults(false)
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      const response = await fetch(`/api/running-backs/search?q=${encodeURIComponent(query)}&week=${currentWeek}&season=${currentSeason}`)
+      const data = await response.json()
+      
+      if (data.runningBacks) {
+        setSearchResults(data.runningBacks)
+        setShowSearchResults(true)
+      }
+    } catch (error) {
+      console.error('Error searching running backs:', error)
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value)
+    if (value.trim()) {
+      searchRunningBacks(value)
+    } else {
+      setSearchResults([])
+      setShowSearchResults(false)
+    }
+  }
+
+  const clearSearch = () => {
+    setSearchQuery('')
+    setSearchResults([])
+    setShowSearchResults(false)
+  }
+
   const handleDeletePick = async () => {
     setDeleting(true)
     setError(null)
@@ -186,8 +231,16 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
 
     setSubmitting(true)
     try {
-      const selectedRB = runningBacks.find(rb => rb.id === selectedPlayer)
-      if (!selectedRB) return
+      // Check both runningBacks and searchResults for the selected player
+      let selectedRB = runningBacks.find(rb => rb.id === selectedPlayer)
+      if (!selectedRB) {
+        selectedRB = searchResults.find(rb => rb.id === selectedPlayer)
+      }
+      
+      if (!selectedRB) {
+        setError('Selected player not found. Please try selecting again.')
+        return
+      }
 
       const response = await fetch('/api/picks', {
         method: 'POST',
@@ -204,6 +257,9 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
 
       if (response.ok) {
         setSelectedPlayer('')
+        setSearchQuery('')
+        setSearchResults([])
+        setShowSearchResults(false)
         // Refresh the current pick to show the submitted pick
         await fetchCurrentPick(propWeek, propSeason)
         onPickSubmitted?.()
@@ -321,41 +377,112 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
             </div>
           </div>
         ) : runningBacks.length === 0 ? (
-          <p className="text-gray-600">No running backs available for this week</p>
+          <div className="text-center py-8">
+            <p className="text-gray-600 mb-2">No running back data available</p>
+            <p className="text-sm text-gray-500">This could be due to:</p>
+            <ul className="text-sm text-gray-500 mt-1 space-y-1">
+              <li>• API connection issues</li>
+              <li>• No data for this week/season</li>
+              <li>• Games not yet scheduled</li>
+            </ul>
+          </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
-              {runningBacks.map((rb) => (
-                <div
-                  key={rb.id}
-                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                    selectedPlayer === rb.id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  onClick={() => setSelectedPlayer(rb.id)}
-                >
-                  <div className="font-medium">{rb.name}</div>
-                  <div className="text-sm text-gray-600">{rb.team}</div>
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <div>vs {rb.opponent} • {rb.gameTime}</div>
-                    <div>Projected: {rb.yards} yards</div>
-                    <div>Avg: {rb.avgYards} • Last week: {rb.lastWeekYards}</div>
+            {/* Search Bar */}
+            <div className="relative">
+              <div className="flex items-center space-x-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search running backs..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="pl-10 pr-10"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={clearSearch}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Search Results */}
+              {showSearchResults && searchResults.length > 0 && (
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-xs text-blue-600 mb-2">
+                    Search results ({searchResults.length} found)
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                    {searchResults.map((rb) => (
+                      <div
+                        key={rb.id}
+                        className={`p-2 border rounded transition-colors ${
+                          rb.is_locked
+                            ? 'border-red-300 bg-red-50 cursor-not-allowed'
+                            : selectedPlayer === rb.id
+                            ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                            : 'border-gray-200 hover:border-gray-300 cursor-pointer'
+                        }`}
+                        onClick={() => !rb.is_locked && setSelectedPlayer(rb.id)}
+                      >
+                        <div className="font-medium text-sm">{rb.name}</div>
+                        <div className="text-xs text-gray-600">{rb.team}</div>
+                        <div className="text-xs text-gray-500">
+                          vs {rb.opponent} • {rb.gameTime}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+              
+              {/* Top Running Backs */}
+              <div className="mt-4">
+                <div className="text-sm font-medium text-gray-700 mb-2">
+                  Top 32 Running Backs (2024 Total Yards)
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 max-h-64 overflow-y-auto">
+                  {runningBacks.map((rb) => (
+                    <div
+                      key={rb.id}
+                      className={`p-2 sm:p-3 border rounded-lg transition-colors ${
+                        rb.is_locked
+                          ? 'border-red-300 bg-red-50 cursor-not-allowed'
+                          : selectedPlayer === rb.id
+                          ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                          : 'border-gray-200 hover:border-gray-300 cursor-pointer'
+                      }`}
+                      onClick={() => !rb.is_locked && setSelectedPlayer(rb.id)}
+                    >
+                      <div className="font-medium text-sm sm:text-base">{rb.name}</div>
+                      <div className="text-xs sm:text-sm text-gray-600">{rb.team}</div>
+                      <div className="text-xs text-gray-500 space-y-1 mt-1">
+                        <div>vs {rb.opponent} • {rb.gameTime}</div>
+                        {rb.is_locked && (
+                          <div className="text-red-600 font-medium">🔒 LOCKED</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             
-            <Button
-              onClick={handleSubmitPick}
-              disabled={!selectedPlayer || submitting}
-              className="w-full"
-            >
-              {submitting ? 'Submitting...' : 'Submit Pick'}
-            </Button>
+              <Button
+                onClick={handleSubmitPick}
+                disabled={!selectedPlayer || submitting}
+                className="w-full"
+              >
+                {submitting ? 'Submitting...' : 'Submit Pick'}
+              </Button>
+            </div>
           </>
-        )}
-      </CardContent>
-    </Card>
-  )
+          )}
+        </CardContent>
+      </Card>
+    )
 }

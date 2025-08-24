@@ -94,19 +94,19 @@ export function Leaderboard() {
         {leaderboard.length === 0 ? (
           <p className="text-gray-600">No players yet. Be the first to make a pick!</p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {leaderboard.map((entry, index) => (
               <div
                 key={entry.user.id}
-                className={`flex items-center justify-between p-3 rounded-lg ${
+                className={`flex items-center justify-between p-2 sm:p-3 rounded-lg ${
                   index === 0 ? 'bg-yellow-50 border border-yellow-200' :
                   index === 1 ? 'bg-gray-50 border border-gray-200' :
                   index === 2 ? 'bg-orange-50 border border-orange-200' :
                   'bg-white border border-gray-100'
                 }`}
               >
-                <div className="flex items-center space-x-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                  <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold flex-shrink-0 ${
                     index === 0 ? 'bg-yellow-400 text-yellow-900' :
                     index === 1 ? 'bg-gray-400 text-gray-900' :
                     index === 2 ? 'bg-orange-400 text-orange-900' :
@@ -123,22 +123,22 @@ export function Leaderboard() {
                         size="sm"
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-gray-200 rounded border-2 border-dashed border-gray-300 flex items-center justify-center">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-200 rounded border-2 border-dashed border-gray-300 flex items-center justify-center">
                         <span className="text-xs text-gray-500">?</span>
                       </div>
                     )}
                   </div>
                   
-                  <div>
-                    <div className="font-medium">{entry.user.team_name}</div>
-                    <div className="text-sm text-gray-600">
-                      {entry.weeklyPicks.length} picks made • {Math.round((entry.totalYards / 2000) * 100)}% to goal
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-sm sm:text-base truncate">{entry.user.team_name}</div>
+                    <div className="text-xs sm:text-sm text-gray-600">
+                      {entry.weeklyPicks.length} picks • {Math.round((entry.totalYards / 2000) * 100)}%
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="font-bold text-lg">{entry.totalYards}</div>
-                  <div className="text-sm text-gray-600">yards</div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <div className="font-bold text-base sm:text-lg">{entry.totalYards}</div>
+                  <div className="text-xs sm:text-sm text-gray-600">yards</div>
                 </div>
               </div>
             ))}

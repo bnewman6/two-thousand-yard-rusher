@@ -107,8 +107,8 @@ export function LogoEditor({ isOpen, onClose, onSave, currentLogo }: LogoEditorP
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-white bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-xl max-h-[90vh] overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 bg-white bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+      <Card className="w-full max-w-xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden shadow-2xl">
         <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center space-x-2">
@@ -126,11 +126,11 @@ export function LogoEditor({ isOpen, onClose, onSave, currentLogo }: LogoEditorP
           </div>
         </CardHeader>
         
-        <CardContent className="p-6 space-y-6">
+        <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Color Palette */}
           <div className="space-y-2">
             <h3 className="text-sm font-medium text-gray-700">Colors</h3>
-            <div className="grid grid-cols-8 gap-2">
+            <div className="grid grid-cols-8 gap-1 sm:gap-2">
               {COLORS.map((color) => (
                 <button
                   key={color}
@@ -165,7 +165,7 @@ export function LogoEditor({ isOpen, onClose, onSave, currentLogo }: LogoEditorP
             <div className="flex justify-center">
               <div 
                 ref={canvasRef}
-                className="border-2 border-gray-300 bg-white inline-block select-none"
+                className="border-2 border-gray-300 bg-white inline-block select-none max-w-full"
                 onMouseLeave={handleMouseLeave}
                 onMouseUp={handleMouseUp}
               >
@@ -203,16 +203,17 @@ export function LogoEditor({ isOpen, onClose, onSave, currentLogo }: LogoEditorP
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t">
+          <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t">
             <Button
               variant="outline"
               onClick={handleCancel}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-2 w-full sm:w-auto"
             >
               <Save className="h-4 w-4" />
               <span>Save Logo</span>

@@ -113,14 +113,14 @@ export function ProfileClient({ user, profile, picks, leaderboardPosition }: Pro
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Profile</h1>
-        <p className="text-gray-600">Manage your account and view your season stats</p>
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Profile</h1>
+        <p className="text-gray-600 text-sm sm:text-base">Manage your account and view your season stats</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Profile Information */}
         <div className="lg:col-span-1">
           <Card>
@@ -154,11 +154,12 @@ export function ProfileClient({ user, profile, picks, leaderboardPosition }: Pro
                         onChange={(e) => setTeamName(e.target.value)}
                         placeholder="Enter your team name"
                       />
-                      <div className="flex space-x-2">
+                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                         <Button
                           onClick={handleSaveProfile}
                           disabled={loading || !teamName.trim()}
                           size="sm"
+                          className="w-full sm:w-auto"
                         >
                           <Save className="h-4 w-4 mr-1" />
                           {loading ? 'Saving...' : 'Save'}
@@ -167,6 +168,7 @@ export function ProfileClient({ user, profile, picks, leaderboardPosition }: Pro
                           onClick={handleCancelEdit}
                           variant="outline"
                           size="sm"
+                          className="w-full sm:w-auto"
                         >
                           <X className="h-4 w-4 mr-1" />
                           Cancel
@@ -212,7 +214,7 @@ export function ProfileClient({ user, profile, picks, leaderboardPosition }: Pro
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <Target className="h-5 w-5 text-blue-600" />
@@ -279,7 +281,7 @@ export function ProfileClient({ user, profile, picks, leaderboardPosition }: Pro
                     <p className="text-sm">Start making picks to see your history here</p>
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                  <div className="space-y-2 sm:space-y-3 max-h-96 overflow-y-auto">
                     {picks.map((pick) => {
                       const status = getPickStatus(pick)
                       return (

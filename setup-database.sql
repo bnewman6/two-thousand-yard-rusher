@@ -12,20 +12,7 @@ CREATE TABLE profiles (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Create weekly_picks table
-CREATE TABLE weekly_picks (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-  week INTEGER NOT NULL,
-  season INTEGER NOT NULL,
-  player_name TEXT NOT NULL,
-  player_id TEXT NOT NULL,
-  yards_gained INTEGER DEFAULT 0,
-  is_finalized BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  UNIQUE(user_id, week, season)
-);
+
 
 -- Create running_backs table for caching NFL data
 CREATE TABLE running_backs (
@@ -38,14 +25,51 @@ CREATE TABLE running_backs (
   week INTEGER NOT NULL,
   yards INTEGER DEFAULT 0,
   games_played INTEGER DEFAULT 1,
+  is_locked BOOLEAN DEFAULT FALSE,
+  game_start_time TIMESTAMP WITH TIME ZONE,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   UNIQUE(player_id, season, week)
+);
+
+-- Create games table for tracking game status
+CREATE TABLE games (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  game_id TEXT UNIQUE NOT NULL,
+  season INTEGER NOT NULL,
+  week INTEGER NOT NULL,
+  home_team TEXT NOT NULL,
+  away_team TEXT NOT NULL,
+  game_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  status TEXT DEFAULT 'scheduled', -- scheduled, live, final, postponed, cancelled
+  quarter INTEGER DEFAULT 0,
+  time_remaining TEXT,
+  home_score INTEGER DEFAULT 0,
+  away_score INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Create weekly_picks table with game status tracking
+CREATE TABLE weekly_picks (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  week INTEGER NOT NULL,
+  season INTEGER NOT NULL,
+  player_name TEXT NOT NULL,
+  player_id TEXT NOT NULL,
+  yards_gained INTEGER DEFAULT 0,
+  is_finalized BOOLEAN DEFAULT FALSE,
+  game_status TEXT DEFAULT 'pending', -- pending, locked, final
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  UNIQUE(user_id, week, season)
 );
 
 -- Enable Row Level Security
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE weekly_picks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE running_backs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for profiles
 CREATE POLICY "Users can view all profiles" ON profiles FOR SELECT USING (true);
@@ -59,6 +83,12 @@ CREATE POLICY "Users can insert own picks" ON weekly_picks FOR INSERT WITH CHECK
 
 -- Create policies for running_backs
 CREATE POLICY "Anyone can view running backs" ON running_backs FOR SELECT USING (true);
+CREATE POLICY "Anyone can update running backs" ON running_backs FOR UPDATE USING (true);
+
+-- Create policies for games
+CREATE POLICY "Anyone can view games" ON games FOR SELECT USING (true);
+CREATE POLICY "Anyone can update games" ON games FOR UPDATE USING (true);
+CREATE POLICY "Anyone can insert games" ON games FOR INSERT WITH CHECK (true);
 
 -- Create function to handle user profile creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -94,3 +124,22 @@ CREATE TRIGGER update_weekly_picks_updated_at BEFORE UPDATE ON weekly_picks
 
 CREATE TRIGGER update_running_backs_updated_at BEFORE UPDATE ON running_backs
   FOR EACH ROW EXECUTE PROCEDURE public.update_updated_at_column();
+
+CREATE TRIGGER update_games_updated_at BEFORE UPDATE ON games
+  FOR EACH ROW EXECUTE PROCEDURE public.update_updated_at_column();
+
+-- Create function to increment total yards safely
+CREATE OR REPLACE FUNCTION increment_total_yards(user_id UUID, yards_to_add INTEGER)
+RETURNS INTEGER AS $$
+DECLARE
+  current_total INTEGER;
+BEGIN
+  -- Get current total yards
+  SELECT total_yards INTO current_total
+  FROM profiles
+  WHERE id = user_id;
+  
+  -- Return new total (add the yards)
+  RETURN COALESCE(current_total, 0) + yards_to_add;
+END;
+$$ LANGUAGE plpgsql;
