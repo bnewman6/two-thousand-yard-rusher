@@ -32,6 +32,10 @@ export interface RunningBack {
   yards: number
   games_played: number
   updated_at: string
+  opponent?: string
+  gameTime?: string
+  avgYards?: number
+  lastWeekYards?: number
 }
 
 export interface NFLPlayer {

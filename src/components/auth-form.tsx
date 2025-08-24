@@ -32,6 +32,7 @@ export function AuthForm() {
       if (error) {
         setError(error.message)
       } else {
+        console.log('Sign in successful, redirecting to dashboard...')
         router.push('/dashboard')
       }
     } catch (error) {
@@ -63,7 +64,23 @@ export function AuthForm() {
       if (error) {
         setError(error.message)
       } else if (data.user) {
-        setMessage('Check your email for the confirmation link!')
+        // Create profile record
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: email,
+            team_name: teamName,
+            total_yards: 0,
+          })
+
+        if (profileError) {
+          console.error('Profile creation error:', profileError)
+          setError('Account created but profile setup failed. Please contact support.')
+        } else {
+          console.log('Sign up successful, redirecting to dashboard...')
+          router.push('/dashboard')
+        }
       }
     } catch (error) {
       setError('An unexpected error occurred')

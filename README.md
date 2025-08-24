@@ -26,30 +26,34 @@ A fantasy football web application where users pick one running back each week, 
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - npm or yarn
 - A Supabase account (free tier available)
 
 ### Installation
 
 1. **Clone the repository:**
+
    ```bash
    git clone <your-repo-url>
    cd fantasy-football-app
    ```
 
 2. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 3. **Set up Supabase:**
+
    - Go to [Supabase](https://supabase.com) and create a new project
    - In your Supabase dashboard, go to Settings > API
    - Copy your project URL and anon key
 
 4. **Set up environment variables:**
    Create a `.env.local` file in the root directory:
+
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
@@ -119,6 +123,7 @@ A fantasy football web application where users pick one running back each week, 
    ```
 
 6. **Run the development server:**
+
    ```bash
    npm run dev
    ```
@@ -150,26 +155,31 @@ src/
 ## Key Features Implementation
 
 ### 1. User Authentication
+
 - Supabase Auth with email/password
 - User profiles with team names
 - Protected routes
 
 ### 2. Weekly Picks System
+
 - Users can pick one running back per week
 - Picks lock before games start
 - Automatic yard accumulation
 
 ### 3. NFL Data Integration
+
 - ESPN API for real-time statistics
 - Automatic updates after games
 - Running back statistics tracking
 
 ### 4. Leaderboard
+
 - Real-time rankings
 - Total yards accumulated
 - Weekly performance tracking
 
 ### 5. Team Logo Designer
+
 - HTML5 Canvas for 8-bit style drawing
 - Save logos as base64 data
 - Display in profiles and leaderboards
@@ -192,10 +202,10 @@ The app will automatically deploy on every push to main branch.
 - [x] Basic project setup with Next.js and TypeScript
 - [x] Supabase authentication integration
 - [x] Database schema and table creation
-- [x] NFL API integration for running back data
-- [ ] Dashboard UI with current week's picks
-- [ ] Weekly pick selection interface
-- [ ] Real-time leaderboard
+- [x] NFL API integration for running back data (2023 season)
+- [x] Dashboard UI with current week's picks
+- [x] Weekly pick selection interface
+- [x] Real-time leaderboard
 - [ ] User profile management
 - [ ] 8-bit logo canvas editor
 - [ ] Mobile responsiveness optimization
