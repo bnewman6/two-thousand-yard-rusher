@@ -1,4 +1,5 @@
 import { NFLPlayer, RunningBack } from '@/types'
+import { sportradarRateLimiter } from './rate-limiter'
 
 const SPORTRADAR_API_BASE = 'https://api.sportradar.com/nfl/official/trial/v7/en'
 
@@ -353,23 +354,23 @@ export class NFLApiService {
         let games_played = 0
         let gameTime = this.formatGameTime(gameScheduled, userTimezone)
 
-        // If game is locked (completed), try to get actual stats
-        if (isGameStarted && gameStatus === 'closed') {
+        // If game is locked (started), try to get actual stats
+        if (isGameStarted && (gameStatus === 'closed' || gameStatus === 'inprogress')) {
           const gameStats = completedGameStats.get(gameId)
           if (gameStats) {
-            // Look for this player in the game stats
-            const homeRushing = gameStats.home?.rushing?.players || []
-            const awayRushing = gameStats.away?.rushing?.players || []
+            // Look for this player in the game stats (correct structure)
+            const homeRushing = gameStats.statistics?.home?.rushing?.players || []
+            const awayRushing = gameStats.statistics?.away?.rushing?.players || []
             
             // Check if player is on home team (teamAlias matches home team alias)
-            if (gameStats.home?.alias === teamAlias) {
+            if (gameStats.statistics?.home?.alias === teamAlias) {
               const homePlayer = homeRushing.find((p: any) => p.id === player.id)
               if (homePlayer) {
                 yards = homePlayer.yards || 0
                 games_played = 1
                 gameTime = `${yards} yards` // Show rushing yards instead of "Final"
               }
-            } else if (gameStats.away?.alias === teamAlias) {
+            } else if (gameStats.statistics?.away?.alias === teamAlias) {
               // Check if player is on away team (teamAlias matches away team alias)
               const awayPlayer = awayRushing.find((p: any) => p.id === player.id)
               if (awayPlayer) {
@@ -414,11 +415,13 @@ export class NFLApiService {
     }
 
     try {
-      // Get current week schedule to find the game
-      const scheduleResponse = await fetch(
-        `${SPORTRADAR_API_BASE}/games/current_week/schedule.json?api_key=${apiKey}`,
-        { next: { revalidate: 3600 } }
-      )
+      // Use rate limiter for schedule request
+      const scheduleResponse = await sportradarRateLimiter.executeRequest(async () => {
+        return fetch(
+          `${SPORTRADAR_API_BASE}/games/current_week/schedule.json?api_key=${apiKey}`,
+          { next: { revalidate: 3600 } }
+        )
+      })
 
       if (!scheduleResponse.ok) {
         throw new Error(`SportRadar schedule API returned ${scheduleResponse.status}`)
@@ -429,18 +432,21 @@ export class NFLApiService {
 
       // Find the game for this player's team
       for (const game of games) {
-        if (game.status === 'closed') {
-          // Get game statistics
-          const gameStatsResponse = await fetch(
-            `${SPORTRADAR_API_BASE}/games/${game.id}/statistics.json?api_key=${apiKey}`,
-            { next: { revalidate: 1800 } }
-          )
+        // Check for both live and completed games
+        if (game.status === 'closed' || game.status === 'inprogress') {
+          // Get game statistics with rate limiting
+          const gameStatsResponse = await sportradarRateLimiter.executeRequest(async () => {
+            return fetch(
+              `${SPORTRADAR_API_BASE}/games/${game.id}/statistics.json?api_key=${apiKey}`,
+              { next: { revalidate: 300 } } // Reduced cache time for live games
+            )
+          })
 
           if (gameStatsResponse.ok) {
             const gameStats = await gameStatsResponse.json()
             
-            // Look for player in home team rushing stats
-            const homeRushing = gameStats.home?.rushing?.players || []
+            // Look for player in home team rushing stats (correct structure)
+            const homeRushing = gameStats.statistics?.home?.rushing?.players || []
             const homePlayer = homeRushing.find((p: any) => p.id === playerId)
             if (homePlayer) {
               return {
@@ -450,11 +456,11 @@ export class NFLApiService {
               }
             }
 
-            // Look for player in away team rushing stats
-            const awayRushing = gameStats.away?.rushing?.players || []
+            // Look for player in away team rushing stats (correct structure)
+            const awayRushing = gameStats.statistics?.away?.rushing?.players || []
             const awayPlayer = awayRushing.find((p: any) => p.id === playerId)
             if (awayPlayer) {
-        return {
+              return {
                 rushingYards: awayPlayer.yards || 0,
                 rushingAttempts: awayPlayer.attempts || 0,
                 rushingTouchdowns: awayPlayer.touchdowns || 0

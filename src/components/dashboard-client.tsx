@@ -5,6 +5,8 @@ import { WeeklyPickSelector } from '@/components/weekly-pick-selector'
 import { Leaderboard } from '@/components/leaderboard'
 import { WeekSimulator } from '@/components/week-simulator'
 import { AutomatedUpdatesPanel } from '@/components/automated-updates-panel'
+import { WeekYardsLeaders } from '@/components/week-yards-leaders'
+import { LiveGamesRushing } from '@/components/live-games-rushing'
 import { NFLApiService } from '@/lib/nfl-api'
 
 interface DashboardClientProps {
@@ -96,6 +98,22 @@ export function DashboardClient({ profile }: DashboardClientProps) {
         
         {/* Leaderboard */}
         <Leaderboard />
+      </div>
+      
+      {/* Week Yards Leaders */}
+      <div className="mt-6 sm:mt-8">
+        <WeekYardsLeaders 
+          season={currentSeason}
+          week={currentWeek}
+        />
+      </div>
+      
+      {/* Live Games Rushing Stats */}
+      <div className="mt-6 sm:mt-8">
+        <LiveGamesRushing 
+          season={currentSeason}
+          week={currentWeek}
+        />
       </div>
       
       {/* Progress to Goal */}

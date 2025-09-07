@@ -137,7 +137,7 @@ export class GameManager {
    */
   async hasLiveGames(season: number, week: number): Promise<boolean> {
     const games = await this.getWeekGames(season, week)
-    return games.some(game => game.status === 'live')
+    return games.some(game => game.status === 'inprogress')
   }
 
   /**

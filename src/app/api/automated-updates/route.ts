@@ -16,6 +16,18 @@ export async function POST(request: NextRequest) {
         // Update lock status for all players in a week
         await gameManager.updatePlayerLocks(season, week)
         
+        // Update games table with current status
+        const gamesResponse = await fetch(`${request.url.split('/api')[0]}/api/update-games`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ season, week })
+        })
+        
+        if (gamesResponse.ok) {
+          const gamesResult = await gamesResponse.json()
+          console.log('Games updated:', gamesResult.message)
+        }
+        
         // Update pick game status for all users
         const { data: picks } = await supabase
           .from('weekly_picks')
@@ -31,7 +43,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({ 
           success: true, 
-          message: 'Player locks updated successfully' 
+          message: 'Player locks and games updated successfully' 
         })
 
       case 'update_player_yards':
@@ -118,7 +130,7 @@ export async function POST(request: NextRequest) {
           .eq('season', season)
           .eq('week', week)
 
-        if (!weekPlayers) {
+        if (!weekPlayers || weekPlayers.length === 0) {
           return NextResponse.json({ 
             success: true, 
             message: 'No players found for this week' 

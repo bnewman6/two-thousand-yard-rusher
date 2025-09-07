@@ -80,7 +80,7 @@ export interface Game {
   home_team: string
   away_team: string
   game_time: string
-  status: 'scheduled' | 'live' | 'final' | 'postponed' | 'cancelled'
+  status: 'scheduled' | 'inprogress' | 'closed' | 'postponed' | 'cancelled'
   quarter: number
   time_remaining: string
   home_score: number

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { getPlayerWeekStats } from '@/lib/nfl-data-2023'
+import { NFLApiService } from '@/lib/nfl-api'
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,13 +35,35 @@ export async function POST(request: NextRequest) {
     // Update total yards for each user based on their picks
     const updates = []
     for (const pick of picks || []) {
-      // Use real 2023 data if available, otherwise fallback
+      // Fetch live stats from Sportradar API
       let yards = 0
-      if (season === 2023) {
-        yards = getPlayerWeekStats(pick.player_id, week)
-      } else {
-        // Fallback calculation
-        yards = 50 + (parseInt(pick.player_id) % 100)
+      try {
+        const liveStats = await NFLApiService.getPlayerStats(pick.player_id, season, week)
+        if (liveStats && liveStats.rushingYards !== undefined) {
+          yards = liveStats.rushingYards
+        } else {
+          console.warn(`No live stats available for player ${pick.player_id}, using current database value`)
+          // Fallback to current database value if no live stats
+          const { data: currentPlayer } = await supabase
+            .from('running_backs')
+            .select('yards')
+            .eq('player_id', pick.player_id)
+            .eq('season', season)
+            .eq('week', week)
+            .single()
+          yards = currentPlayer?.yards || 0
+        }
+      } catch (error) {
+        console.error(`Error fetching live stats for player ${pick.player_id}:`, error)
+        // Fallback to current database value
+        const { data: currentPlayer } = await supabase
+          .from('running_backs')
+          .select('yards')
+          .eq('player_id', pick.player_id)
+          .eq('season', season)
+          .eq('week', week)
+          .single()
+        yards = currentPlayer?.yards || 0
       }
       
       // Update the pick with the yards gained
@@ -90,7 +112,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      message: `Updated ${updates.length} picks for Week ${week}`,
+      message: `Updated ${updates.length} picks for Week ${week} using live Sportradar API data`,
       updates 
     })
   } catch (error) {

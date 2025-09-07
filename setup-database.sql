@@ -40,7 +40,7 @@ CREATE TABLE games (
   home_team TEXT NOT NULL,
   away_team TEXT NOT NULL,
   game_time TIMESTAMP WITH TIME ZONE NOT NULL,
-  status TEXT DEFAULT 'scheduled', -- scheduled, live, final, postponed, cancelled
+  status TEXT DEFAULT 'scheduled', -- scheduled, inprogress, closed, postponed, cancelled
   quarter INTEGER DEFAULT 0,
   time_remaining TEXT,
   home_score INTEGER DEFAULT 0,
