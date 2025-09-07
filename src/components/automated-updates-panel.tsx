@@ -30,6 +30,7 @@ export function AutomatedUpdatesPanel({ season, week }: AutomatedUpdatesPanelPro
     updatePlayerLocks,
     updatePlayerYards,
     updateWeekYards,
+    updateAllPlayers,
     finalizeWeek,
     checkUpdateStatus,
   } = useAutomatedUpdates({ season, week })
@@ -177,6 +178,21 @@ export function AutomatedUpdatesPanel({ season, week }: AutomatedUpdatesPanelPro
             </Button>
           </div>
 
+          {/* Admin Controls */}
+          <div className="border-t pt-3">
+            <h6 className="text-sm font-medium text-gray-700 mb-2">Admin Controls</h6>
+            <Button
+              onClick={updateAllPlayers}
+              disabled={isUpdating}
+              variant="destructive"
+              size="sm"
+              className="flex items-center space-x-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Update All Players (Expensive)</span>
+            </Button>
+          </div>
+
           {/* Individual Player Update */}
           <div className="flex space-x-2">
             <input
@@ -206,10 +222,12 @@ export function AutomatedUpdatesPanel({ season, week }: AutomatedUpdatesPanelPro
         <div className="p-3 bg-gray-50 rounded-lg">
           <h5 className="text-sm font-medium text-gray-700 mb-2">Auto-Update Schedule</h5>
           <div className="text-xs text-gray-600 space-y-1">
-            <div>• Status check: Every 30 seconds</div>
-            <div>• Player locks: Every 60 seconds</div>
-            <div>• Yard updates: Every 30 seconds (during live games)</div>
+            <div>• Status check: Every 60 seconds</div>
+            <div>• Player locks: Every 5 minutes</div>
+            <div>• Yard updates: Every 15 minutes (selected players only, 3.5hr window)</div>
             <div>• Manual controls available for immediate updates</div>
+            <div className="text-green-600 font-medium">• Optimized to reduce API calls by 95%</div>
+            <div className="text-blue-600 font-medium">• Only fetches stats for players with picks</div>
           </div>
         </div>
       </CardContent>

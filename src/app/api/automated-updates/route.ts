@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         })
 
       case 'update_week_yards':
-        // Update yards for all players in a week
+        // Smart yard updates - only update players from games that are live or recently finished
         const { data: weekPlayers } = await supabase
           .from('running_backs')
           .select('*')
@@ -125,7 +125,20 @@ export async function POST(request: NextRequest) {
           })
         }
 
-        const updatePromises = weekPlayers.map(async (player) => {
+        // Filter to only update players from games that are live or finished in the last 3.5 hours
+        const now = new Date()
+        const threeAndHalfHoursAgo = new Date(now.getTime() - 3.5 * 60 * 60 * 1000)
+        
+        const playersToUpdate = weekPlayers.filter(player => {
+          if (!player.game_start_time) return false
+          const gameTime = new Date(player.game_start_time)
+          // Update if game is live (started but not too old) or recently finished
+          return gameTime <= now && gameTime >= threeAndHalfHoursAgo
+        })
+
+        console.log(`Smart update: Updating ${playersToUpdate.length} out of ${weekPlayers.length} players`)
+
+        const updatePromises = playersToUpdate.map(async (player) => {
           try {
             const updatedStats = await NFLApiService.getPlayerStats(player.player_id, season, week)
             
@@ -179,7 +192,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({ 
           success: true, 
-          message: 'Week yards updated successfully' 
+          message: `Smart update: Updated ${playersToUpdate.length} players successfully` 
         })
 
       case 'finalize_week':

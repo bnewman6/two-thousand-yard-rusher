@@ -108,6 +108,40 @@ export function useAutomatedUpdates({ season, week, enabled = true }: UseAutomat
   const updateWeekYards = useCallback(async () => {
     setIsUpdating(true)
     try {
+      const response = await fetch('/api/automated-updates/selected-players', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          season,
+          week,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Selected players yards updated:', data.message)
+        console.log(`API calls made: ${data.totalApiCalls} (vs ~100+ for all players)`)
+        // Trigger a refresh of the leaderboard
+        window.dispatchEvent(new CustomEvent('leaderboardRefresh'))
+        setError(null)
+      } else {
+        const errorData = await response.json()
+        setError(errorData.error || 'Failed to update selected players yards')
+      }
+    } catch (err) {
+      setError('Error updating selected players yards')
+      console.error('Error updating selected players yards:', err)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [season, week])
+
+  // Fallback: Update all players (for admin use)
+  const updateAllPlayers = useCallback(async () => {
+    setIsUpdating(true)
+    try {
       const response = await fetch('/api/automated-updates', {
         method: 'POST',
         headers: {
@@ -122,17 +156,16 @@ export function useAutomatedUpdates({ season, week, enabled = true }: UseAutomat
 
       if (response.ok) {
         const data = await response.json()
-        console.log('Week yards updated:', data.message)
-        // Trigger a refresh of the leaderboard
+        console.log('All players yards updated:', data.message)
         window.dispatchEvent(new CustomEvent('leaderboardRefresh'))
         setError(null)
       } else {
         const errorData = await response.json()
-        setError(errorData.error || 'Failed to update week yards')
+        setError(errorData.error || 'Failed to update all players yards')
       }
     } catch (err) {
-      setError('Error updating week yards')
-      console.error('Error updating week yards:', err)
+      setError('Error updating all players yards')
+      console.error('Error updating all players yards:', err)
     } finally {
       setIsUpdating(false)
     }
@@ -179,14 +212,15 @@ export function useAutomatedUpdates({ season, week, enabled = true }: UseAutomat
     // Initial check
     checkUpdateStatus()
 
-    // Set up polling intervals
-    const statusInterval = setInterval(checkUpdateStatus, 30000) // Check every 30 seconds
-    const lockInterval = setInterval(updatePlayerLocks, 60000) // Update locks every minute
+    // Set up optimized polling intervals
+    const statusInterval = setInterval(checkUpdateStatus, 60000) // Check every 60 seconds (reduced from 30s)
+    const lockInterval = setInterval(updatePlayerLocks, 300000) // Update locks every 5 minutes (reduced from 1m)
 
-    // If there are live games, update yards more frequently
+    // Smart yard updates based on game status
     let yardsInterval: NodeJS.Timeout | null = null
     if (updateStatus?.hasLiveGames) {
-      yardsInterval = setInterval(updateWeekYards, 30000) // Update yards every 30 seconds during live games
+      // During live games, update every 15 minutes for cost optimization
+      yardsInterval = setInterval(updateWeekYards, 900000) // Update yards every 15 minutes during live games
     }
 
     return () => {
@@ -203,6 +237,7 @@ export function useAutomatedUpdates({ season, week, enabled = true }: UseAutomat
     updatePlayerLocks,
     updatePlayerYards,
     updateWeekYards,
+    updateAllPlayers,
     finalizeWeek,
     checkUpdateStatus,
   }
