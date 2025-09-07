@@ -28,6 +28,9 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
   const [searchResults, setSearchResults] = useState<RunningBack[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [showSearchResults, setShowSearchResults] = useState(false)
+  const [showRB1Only, setShowRB1Only] = useState(true)
+  const [allRunningBacks, setAllRunningBacks] = useState<RunningBack[]>([])
+  const [showLocked, setShowLocked] = useState(false)
   const prevWeekSeasonRef = useRef<{ week: number; season: number } | null>(null)
 
   // Single useEffect to handle all state updates and data fetching
@@ -81,12 +84,15 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
       
       console.log('WeeklyPickSelector: Fetching RBs for week/season:', { week, season })
       
-      const response = await fetch(`/api/nfl/running-backs?week=${week}&season=${season}`)
+      // Use the search API to get all running backs (both locked and unlocked)
+      const response = await fetch(`/api/running-backs/search?week=${week}&season=${season}`)
       const data = await response.json()
       
       if (data.runningBacks) {
+        setAllRunningBacks(data.runningBacks)
+        // Keep the original runningBacks for backward compatibility, but it's now the same as allRunningBacks
         setRunningBacks(data.runningBacks)
-        console.log('WeeklyPickSelector: Received RBs for week/season:', { week, season })
+        console.log('WeeklyPickSelector: Received RBs for week/season:', { week, season, count: data.runningBacks.length })
       }
     } catch (error) {
       console.error('Error fetching running backs:', error)
@@ -197,6 +203,58 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
     setShowSearchResults(false)
   }
 
+
+  const handleRB1OnlyToggle = async (checked: boolean) => {
+    setShowRB1Only(checked)
+    
+    if (!checked) {
+      // When switching to "show all", load the comprehensive list
+      try {
+        const response = await fetch(`/api/running-backs/search?week=${currentWeek}&season=${currentSeason}&q=a`)
+        const data = await response.json()
+        
+        if (data.runningBacks) {
+          setAllRunningBacks(data.runningBacks)
+        }
+      } catch (error) {
+        console.error('Error loading all running backs:', error)
+        setError('Failed to load all running backs. Please try again.')
+      }
+    } else {
+      // When switching back to "RB1 only", reload the depth charts data
+      try {
+        const response = await fetch(`/api/running-backs/search?week=${currentWeek}&season=${currentSeason}`)
+        const data = await response.json()
+        
+        if (data.runningBacks) {
+          setAllRunningBacks(data.runningBacks)
+        }
+      } catch (error) {
+        console.error('Error loading RB1 running backs:', error)
+        setError('Failed to load running backs. Please try again.')
+      }
+    }
+  }
+
+  const getFilteredRunningBacks = (rbs: RunningBack[]) => {
+    if (showLocked) {
+      return rbs // Show all (locked and unlocked)
+    } else {
+      return rbs.filter(rb => !rb.is_locked) // Show only unlocked
+    }
+  }
+
+  const getDisplayRunningBacks = () => {
+    if (showRB1Only) {
+      // For RB1 only, the API already returns the correct RB1s from depth charts
+      return allRunningBacks
+    } else {
+      // For all RBs, we need to load the comprehensive list
+      // This will be handled by the search functionality
+      return allRunningBacks
+    }
+  }
+
   const handleDeletePick = async () => {
     setDeleting(true)
     setError(null)
@@ -231,8 +289,8 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
 
     setSubmitting(true)
     try {
-      // Check both runningBacks and searchResults for the selected player
-      let selectedRB = runningBacks.find(rb => rb.id === selectedPlayer)
+      // Check the current display running backs and search results for the selected player
+      let selectedRB = getDisplayRunningBacks().find(rb => rb.id === selectedPlayer)
       if (!selectedRB) {
         selectedRB = searchResults.find(rb => rb.id === selectedPlayer)
       }
@@ -441,13 +499,36 @@ export function WeeklyPickSelector({ onPickSubmitted, currentWeek: propWeek, cur
                 </div>
               )}
               
-              {/* Top Running Backs */}
+              {/* Running Backs Display */}
               <div className="mt-4">
-                <div className="text-sm font-medium text-gray-700 mb-2">
-                  Top 32 Running Backs (2024 Total Yards)
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-medium text-gray-700">
+                    {showRB1Only ? 'Top Running Backs' : 'All Running Backs'} ({getFilteredRunningBacks(getDisplayRunningBacks()).length} shown)
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <label className="flex items-center space-x-1 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={showRB1Only}
+                        onChange={(e) => handleRB1OnlyToggle(e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      <span>Show RB1 Only</span>
+                    </label>
+                    <label className="flex items-center space-x-1 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={showLocked}
+                        onChange={(e) => setShowLocked(e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      <span>Show Locked</span>
+                    </label>
+                  </div>
                 </div>
+                
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 max-h-64 overflow-y-auto">
-                  {runningBacks.map((rb) => (
+                  {getFilteredRunningBacks(getDisplayRunningBacks()).map((rb) => (
                     <div
                       key={rb.id}
                       className={`p-2 sm:p-3 border rounded-lg transition-colors ${

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { NFLApiService } from '@/lib/nfl-api'
 
+/**
+ * NFL Running Backs API
+ * 
+ * Usage:
+ * - GET /api/nfl/running-backs - Get current week running backs
+ * - GET /api/nfl/running-backs?week=1&season=2025 - Get specific week running backs
+ */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)

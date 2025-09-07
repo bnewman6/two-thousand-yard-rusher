@@ -1,512 +1,521 @@
 import { NFLPlayer, RunningBack } from '@/types'
-import { getTopRunningBacksForWeek, getPlayerWeekStats } from './nfl-data-2023'
 
-const ESPN_API_BASE = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl'
+const SPORTRADAR_API_BASE = 'https://api.sportradar.com/nfl/official/trial/v7/en'
 
 export class NFLApiService {
   /**
+   * Get current week and season information
+   */
+  static getCurrentWeekAndSeason() {
+    // For now, return Week 1 of 2025 season
+    // In a real implementation, this would dynamically determine the current week
+    return { week: 1, season: 2025 }
+  }
+
+  /**
    * Fetch current week's running back statistics
+   * Used by: /api/nfl/running-backs
    */
   static async getCurrentWeekRunningBacks(week: number, season: number): Promise<RunningBack[]> {
-    // For 2023 season, use our real data
-    if (season === 2023) {
-      return this.getReal2023RunningBacks(week)
-    }
-    
     // For 2025 season, use real NFL API data
     if (season === 2025) {
       return this.getReal2025RunningBacks(week)
     }
     
-    // For other seasons, try ESPN API (though it may not work)
-    try {
-      const response = await fetch(
-        `${ESPN_API_BASE}/seasons/${season}/weeks/${week}/leaders?limit=50`,
-        { next: { revalidate: 3600 } } // Cache for 1 hour
-      )
-      
-      if (!response.ok) {
-        console.log(`No ESPN API data for Week ${week}, Season ${season}`)
-        return this.getEmptyRunningBacks()
-      }
-      
-      const data = await response.json()
-      
-      // Extract rushing leaders
-      const rushingLeaders = data.leaders?.find((category: any) => 
-        category.displayName === 'Rushing Yards' || 
-        category.name === 'rushingYards'
-      )
-      
-      if (!rushingLeaders?.leaders) {
-        console.log(`No rushing leaders found for Week ${week}`)
-        return this.getEmptyRunningBacks()
-      }
-      
-      // Convert to our format
-      return rushingLeaders.leaders
-        .filter((player: any) => player.athlete?.position?.abbreviation === 'RB')
-        .slice(0, 10) // Top 10 running backs
-        .map((player: any) => ({
-          id: `${player.athlete.id}-${season}-${week}`,
-          player_id: player.athlete.id,
-          name: player.athlete.displayName,
-          team: player.athlete.team?.abbreviation || 'UNK',
-          position: 'RB',
-          season,
-          week,
-          yards: parseFloat(player.value) || 0,
-          games_played: 1,
-          updated_at: new Date().toISOString(),
-          // Additional metadata
-          opponent: 'TBD',
-          gameTime: 'Completed'
-        }))
-      
-    } catch (error) {
-      console.error('Error fetching NFL data:', error)
-      return this.getEmptyRunningBacks()
+    // For other seasons, return empty data
+    return this.getEmptyRunningBacks()
+  }
+
+  /**
+   * Get RB1s from depth charts for the main running backs list
+   * Used by: /api/running-backs/search (when no search query)
+   */
+  static async fetchRunningBacksFromDepthCharts(week: number, userTimezone?: string): Promise<RunningBack[]> {
+    const apiKey = process.env.SPORTRADAR_API_KEY
+    if (!apiKey) {
+      throw new Error('SportRadar API key not configured')
     }
-  }
 
-  /**
-   * Get real 2023 season running back data
-   */
-  static getReal2023RunningBacks(week: number): RunningBack[] {
-    const topRBs = getTopRunningBacksForWeek(week, 10)
-    
-    return topRBs.map((player) => ({
-      id: `${player.id}-2023-${week}`,
-      player_id: player.id,
-      name: player.name,
-      team: player.team,
-      position: 'RB',
-      season: 2023,
-      week,
-      yards: player.weekYards,
-      games_played: 1,
-      updated_at: new Date().toISOString(),
-      // Additional metadata
-      opponent: 'Completed',
-      gameTime: 'Final'
-    }))
-  }
-
-  /**
-   * Get real 2025 season running back data from NFL API
-   */
-  static async getReal2025RunningBacks(week: number): Promise<RunningBack[]> {
     try {
-      // Get running backs from multiple teams to create a comprehensive list
-      const teams = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
-      const allRBs: any[] = []
-      
-      // Get RBs from first 8 teams (to avoid too many API calls)
-      for (const teamId of teams.slice(0, 8)) {
+      // Step 1: Get current week schedule
+      const scheduleResponse = await fetch(
+        `${SPORTRADAR_API_BASE}/games/current_week/schedule.json?api_key=${apiKey}`,
+        { next: { revalidate: 3600 } }
+      )
+
+      if (!scheduleResponse.ok) {
+        throw new Error(`SportRadar schedule API returned ${scheduleResponse.status}`)
+      }
+
+      const scheduleData = await scheduleResponse.json()
+      const games = scheduleData.week?.games || []
+
+      // Step 2: Create game info map
+      const teamGameInfo = new Map<string, any>()
+      games.forEach((game: any) => {
+        const gameStartTime = new Date(game.scheduled)
+        const now = new Date()
+        const isGameStarted = gameStartTime <= now
+
+        if (game.home?.id) {
+          teamGameInfo.set(game.home.id, {
+            gameId: game.id,
+            scheduled: game.scheduled,
+            status: game.status,
+            isLocked: isGameStarted,
+            teamAlias: game.home.alias,
+            opponent: game.away?.alias || 'TBD'
+          })
+        }
+
+        if (game.away?.id) {
+          teamGameInfo.set(game.away.id, {
+            gameId: game.id,
+            scheduled: game.scheduled,
+            status: game.status,
+            isLocked: isGameStarted,
+            teamAlias: game.away.alias,
+            opponent: game.home?.alias || 'TBD'
+          })
+        }
+      })
+
+      // Step 3: Get Weekly Depth Charts
+      const depthChartsResponse = await fetch(
+        `${SPORTRADAR_API_BASE}/seasons/2025/REG/${week}/depth_charts.json?api_key=${apiKey}`,
+        { next: { revalidate: 3600 } }
+      )
+
+      if (!depthChartsResponse.ok) {
+        throw new Error(`SportRadar depth charts API returned ${depthChartsResponse.status}`)
+      }
+
+      const depthChartsData = await depthChartsResponse.json()
+      const teams = depthChartsData.teams || []
+
+      // Step 4: Get completed game stats for locked players
+      const completedGameStats = new Map<string, any>()
+      const completedGames = games.filter((game: any) => game.status === 'closed')
+
+      for (const game of completedGames) {
         try {
-          const response = await fetch(`${ESPN_API_BASE}/teams/${teamId}/roster`)
-          if (response.ok) {
-            const data = await response.json()
-            const teamRBs = data.athletes
-              ?.find((group: any) => group.position === 'offense')
-              ?.items?.filter((player: any) => player.position?.abbreviation === 'RB')
-              ?.map((player: any) => ({
-                ...player,
-                team: data.team?.abbreviation || 'UNK'
-              })) || []
-            
-            allRBs.push(...teamRBs)
+          const gameStatsResponse = await fetch(
+            `${SPORTRADAR_API_BASE}/games/${game.id}/statistics.json?api_key=${apiKey}`,
+            { next: { revalidate: 1800 } }
+          )
+
+          if (gameStatsResponse.ok) {
+            const gameStats = await gameStatsResponse.json()
+            completedGameStats.set(game.id, gameStats)
           }
         } catch (error) {
-          console.error(`Error fetching team ${teamId} roster:`, error)
+          console.error(`Error fetching stats for game ${game.id}:`, error)
         }
       }
-      
-      // Convert to RunningBack format and filter for top players
-      const runningBacks = allRBs.map((rb, index) => {
-        // Generate realistic simulated stats
-        const baseYards = 60 + (index * 8) + (Math.random() * 40)
-        const yards = Math.round(baseYards)
-        
-        // Get game time from scoreboard
-        const gameTime = this.getGameTimeForTeam(rb.team, week)
-        
-        return {
-          id: `${rb.id}-2025-${week}`,
-          player_id: rb.id,
-          name: rb.displayName,
-          team: rb.team,
-          position: 'RB',
-          season: 2025,
-          week,
-          yards,
-          games_played: 1,
-          updated_at: new Date().toISOString(),
-          is_locked: false,
-          game_start_time: gameTime,
-          // Additional metadata
-          opponent: this.getOpponentForTeam(rb.team, week),
-          gameTime: gameTime ? new Date(gameTime).toLocaleString() : 'TBD'
+
+      // Step 5: Extract RB1 from each team's depth chart
+      const allRunningBacks: RunningBack[] = []
+
+      for (const team of teams) {
+        const gameInfo = teamGameInfo.get(team.id)
+        if (!gameInfo) continue
+
+        // Find the RB position in the offense
+        const offense = team.offense || []
+        const runningBacks: any[] = []
+
+        for (const positionGroup of offense) {
+          if (positionGroup.position?.name === 'RB' && positionGroup.position?.players) {
+            runningBacks.push(...positionGroup.position.players)
+          }
         }
-      })
 
-      // Filter for top running backs only
-      return await this.filterTopRunningBacks(runningBacks)
-      
-    } catch (error) {
-      console.error('Error fetching 2025 running backs:', error)
-      return this.getEmptyRunningBacks()
-    }
-  }
+        // Sort by depth and take top 1 (RB1)
+        const top1RB = runningBacks
+          .sort((a: any, b: any) => a.depth - b.depth)
+          .slice(0, 1)
 
-  /**
-   * Filter running backs to show only top players based on 2024 total yards
-   */
-  static async filterTopRunningBacks(runningBacks: RunningBack[]): Promise<RunningBack[]> {
-    try {
-      // Get 2024 rushing leaders to determine top players
-      const response = await fetch(`${ESPN_API_BASE}/seasons/2024/leaders/rushing`)
-      
-      if (!response.ok) {
-        console.log('Could not fetch 2024 rushing leaders, using fallback filtering')
-        return this.fallbackFilterTopRunningBacks(runningBacks)
-      }
-
-      const data = await response.json()
-      const leaders = data.leaders || []
-      
-      console.log('2024 rushing leaders data:', leaders.slice(0, 5)) // Log first 5 for debugging
-      
-      // Create a set of top player IDs from 2024 rushing leaders
-      const topPlayerIds = new Set(leaders.map((leader: any) => leader.athlete?.id?.toString()))
-      
-      // Filter running backs to only include those in the top rushing leaders
-      const topRunningBacks = runningBacks.filter(rb => topPlayerIds.has(rb.player_id))
-      
-      // Sort by 2024 total yards (descending)
-      const sortedRunningBacks = topRunningBacks.sort((a, b) => {
-        const aLeader = leaders.find((leader: any) => leader.athlete?.id?.toString() === a.player_id)
-        const bLeader = leaders.find((leader: any) => leader.athlete?.id?.toString() === b.player_id)
-        
-        const aYards = aLeader?.value || 0
-        const bYards = bLeader?.value || 0
-        
-        return bYards - aYards // Sort descending
-      })
-      
-      // Return top 32 players
-      return sortedRunningBacks.slice(0, 32)
-      
-    } catch (error) {
-      console.error('Error filtering by 2024 yards:', error)
-      return this.fallbackFilterTopRunningBacks(runningBacks)
-    }
-  }
-
-  /**
-   * Fallback filtering when 2024 data is not available
-   */
-  static fallbackFilterTopRunningBacks(runningBacks: RunningBack[]): RunningBack[] {
-    // List of known top running backs (starters and primary backups)
-    const topRBNames = [
-      'Christian McCaffrey', 'Saquon Barkley', 'Derrick Henry', 'Josh Jacobs', 'Breece Hall',
-      'Travis Etienne', 'Rachaad White', 'Kyren Williams', 'James Conner', 'Joe Mixon',
-      'Alvin Kamara', 'Austin Ekeler', 'Aaron Jones', 'David Montgomery', 'Jahmyr Gibbs',
-      'Tony Pollard', 'Miles Sanders', 'Dameon Pierce', 'Kenneth Walker', 'Najee Harris',
-      'J.K. Dobbins', 'Cam Akers', 'Alexander Mattison', 'Rashaad Penny', 'D\'Andre Swift',
-      'Ezekiel Elliott', 'Dalvin Cook', 'Kareem Hunt', 'Melvin Gordon', 'Mark Ingram',
-      'Clyde Edwards-Helaire', 'Chuba Hubbard', 'D\'Onta Foreman', 'Samaje Perine',
-      'Gus Edwards', 'Justice Hill', 'Tyler Allgeier', 'Cordarrelle Patterson',
-      'Devin Singletary', 'Damien Harris', 'Rhamondre Stevenson', 'Zack Moss',
-      'AJ Dillon', 'Khalil Herbert', 'Dontrell Hilliard', 'Nyheim Hines'
-    ]
-
-    // Filter for top players or players with recognizable names
-    return runningBacks.filter(rb => {
-      // Include if it's a known top RB
-      if (topRBNames.some(name => 
-        rb.name.toLowerCase().includes(name.toLowerCase()) ||
-        name.toLowerCase().includes(rb.name.toLowerCase())
-      )) {
-        return true
-      }
-
-      // Include if name suggests they're a starter (no "Jr", "III", etc. and reasonable name length)
-      const cleanName = rb.name.replace(/[^a-zA-Z\s]/g, '').trim()
-      if (cleanName.length >= 8 && cleanName.length <= 25) {
-        return true
-      }
-
-      return false
-    }).slice(0, 32) // Limit to top 32 players
-  }
-
-  /**
-   * Get all running backs (unfiltered) for search functionality
-   */
-  static async getAllRunningBacksForSearch(week: number, season: number): Promise<RunningBack[]> {
-    try {
-      if (season === 2025) {
-        // For 2025, get all RBs from all teams
-        const teamIds = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
-        const allRBs: any[] = []
-        
-        for (const teamId of teamIds) {
-          try {
-            const response = await fetch(`${ESPN_API_BASE}/teams/${teamId}/roster`)
-            if (response.ok) {
-              const data = await response.json()
-              const teamRBs = data.athletes
-                ?.find((group: any) => group.position === 'offense')
-                ?.items?.filter((player: any) => player.position?.abbreviation === 'RB')
-                ?.map((player: any) => ({
-                  ...player,
-                  team: data.team?.abbreviation || 'UNK'
-                })) || []
+        top1RB.forEach((player: any) => {
+          let yards = 0
+          let games_played = 0
+          let gameTime = this.formatGameTime(gameInfo.scheduled, userTimezone)
+          
+          // If game is locked (completed), try to get actual stats
+          if (gameInfo.isLocked && gameInfo.status === 'closed') {
+            const gameStats = completedGameStats.get(gameInfo.gameId)
+            if (gameStats) {
+              // Look for this player in the game stats
+              const homeRushing = gameStats.home?.rushing?.players || []
+              const awayRushing = gameStats.away?.rushing?.players || []
               
-              allRBs.push(...teamRBs)
+              // Check if player is on home team
+              const homePlayer = homeRushing.find((p: any) => p.id === player.id)
+              if (homePlayer) {
+                yards = homePlayer.yards || 0
+                games_played = 1
+                gameTime = `${yards} yards` // Show rushing yards instead of "Final"
+              } else {
+                // Check if player is on away team
+                const awayPlayer = awayRushing.find((p: any) => p.id === player.id)
+                if (awayPlayer) {
+                  yards = awayPlayer.yards || 0
+                  games_played = 1
+                  gameTime = `${yards} yards` // Show rushing yards instead of "Final"
+                }
+              }
             }
-          } catch (error) {
-            console.error(`Error fetching team ${teamId} roster:`, error)
           }
-        }
-
-        const runningBacks = allRBs.map((rb, index) => {
-          const gameTime = this.getGameTimeForTeam(rb.team, week)
-          return {
-            id: `${rb.id}-${season}-${week}`,
-            player_id: rb.id,
-            name: rb.displayName,
-            team: rb.team,
-            position: 'RB',
-            season,
-            week,
-            yards: 0,
-            games_played: 0,
-            updated_at: new Date().toISOString(),
-            is_locked: false,
-            game_start_time: gameTime,
-            opponent: this.getOpponentForTeam(rb.team, week),
-            gameTime: gameTime ? new Date(gameTime).toLocaleString() : 'TBD'
-          }
+          
+          allRunningBacks.push({
+            id: `${player.id}-2025-${week}`,
+            player_id: player.id,
+            name: player.name,
+            team: team.alias,
+          position: 'RB',
+            season: 2025,
+          week,
+            yards,
+            games_played,
+          updated_at: new Date().toISOString(),
+            is_locked: gameInfo.isLocked,
+            game_start_time: gameInfo.status === 'closed' ? 'Final' : gameInfo.scheduled,
+            opponent: gameInfo.opponent,
+            gameTime
+          })
         })
-
-        // For search, we want ALL running backs, not just top 32
-        return runningBacks
-      } else {
-        // For other seasons, use existing method
-        return this.getCurrentWeekRunningBacks(week, season)
       }
+
+      return allRunningBacks
+      
     } catch (error) {
-      console.error('Error fetching all running backs for search:', error)
-      return []
+      console.error('Error fetching running backs from depth charts:', error)
+      throw error
     }
   }
 
   /**
-   * Get empty running back data when API calls fail
+   * Get all running backs for search functionality
+   * Used by: /api/running-backs/search (when search query is provided)
    */
-  static getEmptyRunningBacks(): RunningBack[] {
-    return []
+  static async getAllRunningBacksForSearch(week: number, season: number, userTimezone?: string): Promise<RunningBack[]> {
+    return this.fetchComprehensiveRunningBacks(week, userTimezone)
   }
-  
+
   /**
-   * Fetch all active running backs for the current season
+   * Fetch comprehensive running backs data (all RBs from all teams)
+   * Used by: getAllRunningBacksForSearch
    */
-  static async getAllRunningBacks(season: number): Promise<NFLPlayer[]> {
+  private static async fetchComprehensiveRunningBacks(week: number, userTimezone?: string): Promise<RunningBack[]> {
+    const apiKey = process.env.SPORTRADAR_API_KEY
+    if (!apiKey) {
+      throw new Error('SportRadar API key not configured')
+    }
+
     try {
-      const response = await fetch(
-        `${ESPN_API_BASE}/seasons/${season}/athletes?position=RB&limit=100`,
-        { next: { revalidate: 86400 } } // Cache for 24 hours
+      // Step 1: Get current week schedule
+      const scheduleResponse = await fetch(
+        `${SPORTRADAR_API_BASE}/games/current_week/schedule.json?api_key=${apiKey}`,
+        { next: { revalidate: 3600 } }
       )
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch NFL players: ${response.statusText}`)
+
+      if (!scheduleResponse.ok) {
+        throw new Error(`SportRadar schedule API returned ${scheduleResponse.status}`)
       }
-      
-      const data = await response.json()
-      
-      return data.athletes?.map((player: any) => ({
-        id: player.id,
-        displayName: player.displayName,
-        shortName: player.shortName || player.displayName,
-        jersey: player.jersey || '',
-        position: {
-          abbreviation: player.position?.abbreviation || 'RB',
-          displayName: player.position?.displayName || 'Running Back'
-        },
-        team: {
-          id: player.team?.id || '',
-          abbreviation: player.team?.abbreviation || '',
-          displayName: player.team?.displayName || '',
-          color: player.team?.color || '000000',
-          alternateColor: player.team?.alternateColor || 'FFFFFF'
+
+      const scheduleData = await scheduleResponse.json()
+      const games = scheduleData.week?.games || []
+
+      // Step 2: Get completed game stats for locked players
+      const completedGameStats = new Map<string, any>()
+      const completedGames = games.filter((game: any) => game.status === 'closed')
+
+      for (const game of completedGames) {
+        try {
+          const gameStatsResponse = await fetch(
+            `${SPORTRADAR_API_BASE}/games/${game.id}/statistics.json?api_key=${apiKey}`,
+            { next: { revalidate: 1800 } }
+          )
+
+          if (gameStatsResponse.ok) {
+            const gameStats = await gameStatsResponse.json()
+            completedGameStats.set(game.id, gameStats)
+          }
+        } catch (error) {
+          console.error(`Error fetching stats for game ${game.id}:`, error)
         }
-      })) || []
+      }
+
+      // Step 3: Get all teams from the current week schedule
+      const teamsInWeek = new Set<string>()
+      games.forEach((game: any) => {
+        if (game.home?.id) teamsInWeek.add(game.home.id)
+        if (game.away?.id) teamsInWeek.add(game.away.id)
+      })
+
+      // Step 4: Get roster for each team playing this week
+      const allRunningBacks: RunningBack[] = []
+
+      for (const game of games) {
+        const homeTeam = game.home
+        const awayTeam = game.away
+
+        if (!homeTeam || !awayTeam) continue
+
+        const gameStartTime = new Date(game.scheduled)
+        const now = new Date()
+        const isGameStarted = gameStartTime <= now
+
+        // Process home team
+        await this.processTeamRoster(
+          homeTeam.id,
+          homeTeam.alias,
+          awayTeam.alias,
+          game.id,
+          game.scheduled,
+          game.status,
+          isGameStarted,
+          completedGameStats,
+          allRunningBacks,
+          week,
+          userTimezone
+        )
+
+        // Process away team
+        await this.processTeamRoster(
+          awayTeam.id,
+          awayTeam.alias,
+          homeTeam.alias,
+          game.id,
+          game.scheduled,
+          game.status,
+          isGameStarted,
+          completedGameStats,
+          allRunningBacks,
+          week,
+          userTimezone
+        )
+      }
+
+      // Sort by locked status, then by yards, then alphabetically
+      return allRunningBacks.sort((a, b) => {
+        if (a.is_locked !== b.is_locked) {
+          return a.is_locked ? -1 : 1 // Locked players first
+        }
+        if (a.yards !== b.yards) {
+          return b.yards - a.yards // Higher yards first
+        }
+        return a.name.localeCompare(b.name) // Alphabetical
+      })
+      
     } catch (error) {
-      console.error('Error fetching NFL players:', error)
-      return []
+      console.error('Error fetching comprehensive running backs:', error)
+      throw error
     }
   }
-  
+
   /**
-   * Get player stats for automated updates
+   * Process a team's roster to extract running backs
+   */
+  private static async processTeamRoster(
+    teamId: string,
+    teamAlias: string,
+    opponentAlias: string,
+    gameId: string,
+    gameScheduled: string,
+    gameStatus: string,
+    isGameStarted: boolean,
+    completedGameStats: Map<string, any>,
+    allRunningBacks: RunningBack[],
+    week: number,
+    userTimezone?: string
+  ) {
+    const apiKey = process.env.SPORTRADAR_API_KEY
+    if (!apiKey) return
+
+    try {
+      const rosterResponse = await fetch(
+        `${SPORTRADAR_API_BASE}/teams/${teamId}/full_roster.json?api_key=${apiKey}`,
+        { next: { revalidate: 3600 } }
+      )
+
+      if (!rosterResponse.ok) {
+        console.error(`Failed to fetch roster for team ${teamId}: ${rosterResponse.status}`)
+        return
+      }
+
+      const rosterData = await rosterResponse.json()
+      const runningBacks = rosterData.players?.filter((player: any) => 
+        player.position === 'RB' && player.status === 'ACT'
+      ) || []
+
+      for (const player of runningBacks) {
+        let yards = 0
+        let games_played = 0
+        let gameTime = this.formatGameTime(gameScheduled, userTimezone)
+
+        // If game is locked (completed), try to get actual stats
+        if (isGameStarted && gameStatus === 'closed') {
+          const gameStats = completedGameStats.get(gameId)
+          if (gameStats) {
+            // Look for this player in the game stats
+            const homeRushing = gameStats.home?.rushing?.players || []
+            const awayRushing = gameStats.away?.rushing?.players || []
+            
+            // Check if player is on home team (teamAlias matches home team alias)
+            if (gameStats.home?.alias === teamAlias) {
+              const homePlayer = homeRushing.find((p: any) => p.id === player.id)
+              if (homePlayer) {
+                yards = homePlayer.yards || 0
+                games_played = 1
+                gameTime = `${yards} yards` // Show rushing yards instead of "Final"
+              }
+            } else if (gameStats.away?.alias === teamAlias) {
+              // Check if player is on away team (teamAlias matches away team alias)
+              const awayPlayer = awayRushing.find((p: any) => p.id === player.id)
+              if (awayPlayer) {
+                yards = awayPlayer.yards || 0
+                games_played = 1
+                gameTime = `${yards} yards` // Show rushing yards instead of "Final"
+              }
+            }
+          }
+        }
+
+        allRunningBacks.push({
+          id: `${player.id}-2025-${week}`,
+          player_id: player.id,
+          name: player.name,
+          team: teamAlias,
+            position: 'RB',
+          season: 2025,
+            week,
+          yards,
+          games_played,
+            updated_at: new Date().toISOString(),
+          is_locked: isGameStarted,
+          game_start_time: gameStatus === 'closed' ? 'Final' : gameScheduled,
+          opponent: opponentAlias,
+          gameTime
+        })
+      }
+    } catch (error) {
+      console.error(`Error fetching roster for team ${teamId}:`, error)
+    }
+  }
+
+  /**
+   * Get player statistics for a specific player
+   * Used by: /api/automated-updates
    */
   static async getPlayerStats(playerId: string, season: number, week: number): Promise<any> {
+    const apiKey = process.env.SPORTRADAR_API_KEY
+    if (!apiKey) {
+      throw new Error('SportRadar API key not configured')
+    }
+
     try {
-      // For 2023 season, use our real data
-      if (season === 2023) {
-        const stats = getPlayerWeekStats(playerId, week)
-        return {
-          rushingYards: stats,
-          rushingAttempts: Math.floor(stats / 4.5), // Estimate attempts
-          rushingTouchdowns: Math.floor(stats / 100), // Estimate TDs
-        }
-      }
-      
-      // For 2025 season, simulate stats since games haven't started
-      if (season === 2025) {
-        // Generate realistic simulated stats based on player ID
-        const seed = parseInt(playerId) + week
-        const rushingYards = 50 + (seed % 100) + Math.floor(Math.random() * 50)
-        const rushingAttempts = Math.floor(rushingYards / 4.5) + Math.floor(Math.random() * 5)
-        const rushingTouchdowns = Math.floor(rushingYards / 100) + Math.floor(Math.random() * 2)
-        
-        return {
-          rushingYards,
-          rushingAttempts,
-          rushingTouchdowns,
-        }
-      }
-      
-      // For other seasons, try ESPN API
-      const response = await fetch(
-        `${ESPN_API_BASE}/seasons/${season}/weeks/${week}/athletes/${playerId}/statistics`,
-        { next: { revalidate: 3600 } } // Cache for 1 hour
+      // Get current week schedule to find the game
+      const scheduleResponse = await fetch(
+        `${SPORTRADAR_API_BASE}/games/current_week/schedule.json?api_key=${apiKey}`,
+        { next: { revalidate: 3600 } }
       )
-      
-      if (!response.ok) {
+
+      if (!scheduleResponse.ok) {
+        throw new Error(`SportRadar schedule API returned ${scheduleResponse.status}`)
+      }
+
+      const scheduleData = await scheduleResponse.json()
+      const games = scheduleData.week?.games || []
+
+      // Find the game for this player's team
+      for (const game of games) {
+        if (game.status === 'closed') {
+          // Get game statistics
+          const gameStatsResponse = await fetch(
+            `${SPORTRADAR_API_BASE}/games/${game.id}/statistics.json?api_key=${apiKey}`,
+            { next: { revalidate: 1800 } }
+          )
+
+          if (gameStatsResponse.ok) {
+            const gameStats = await gameStatsResponse.json()
+            
+            // Look for player in home team rushing stats
+            const homeRushing = gameStats.home?.rushing?.players || []
+            const homePlayer = homeRushing.find((p: any) => p.id === playerId)
+            if (homePlayer) {
+              return {
+                rushingYards: homePlayer.yards || 0,
+                rushingAttempts: homePlayer.attempts || 0,
+                rushingTouchdowns: homePlayer.touchdowns || 0
+              }
+            }
+
+            // Look for player in away team rushing stats
+            const awayRushing = gameStats.away?.rushing?.players || []
+            const awayPlayer = awayRushing.find((p: any) => p.id === playerId)
+            if (awayPlayer) {
+        return {
+                rushingYards: awayPlayer.yards || 0,
+                rushingAttempts: awayPlayer.attempts || 0,
+                rushingTouchdowns: awayPlayer.touchdowns || 0
+              }
+            }
+          }
+        }
+      }
+
         return null
-      }
-      
-      const data = await response.json()
-      
-      // Look for rushing stats in the statistics
-      const rushingYards = data.statistics?.find((stat: any) => 
-        stat.name === 'rushingYards' || stat.displayName === 'Rushing Yards'
-      )
-      
-      const rushingAttempts = data.statistics?.find((stat: any) => 
-        stat.name === 'rushingAttempts' || stat.displayName === 'Rushing Attempts'
-      )
-      
-      const rushingTouchdowns = data.statistics?.find((stat: any) => 
-        stat.name === 'rushingTouchdowns' || stat.displayName === 'Rushing Touchdowns'
-      )
-      
-      return {
-        rushingYards: parseFloat(rushingYards?.value) || 0,
-        rushingAttempts: parseFloat(rushingAttempts?.value) || 0,
-        rushingTouchdowns: parseFloat(rushingTouchdowns?.value) || 0,
-      }
     } catch (error) {
-      console.error(`Error fetching player ${playerId} stats:`, error)
+      console.error('Error fetching player stats:', error)
       return null
     }
   }
 
   /**
-   * Fetch specific player statistics for a week
+   * Get 2025 season running backs (fallback method)
    */
-  static async getPlayerWeekStats(playerId: string, week: number, season: number): Promise<number> {
+  private static async getReal2025RunningBacks(week: number): Promise<RunningBack[]> {
+    // Use the comprehensive method as fallback
+    return this.fetchComprehensiveRunningBacks(week)
+  }
+
+  /**
+   * Get empty running backs array for unsupported seasons
+   */
+  private static getEmptyRunningBacks(): RunningBack[] {
+    return []
+  }
+
+  /**
+   * Format game time for display
+   */
+  private static formatGameTime(scheduled: string, userTimezone?: string): string {
     try {
-      const response = await fetch(
-        `${ESPN_API_BASE}/seasons/${season}/weeks/${week}/athletes/${playerId}/statistics`,
-        { next: { revalidate: 3600 } } // Cache for 1 hour
-      )
+      const gameTime = new Date(scheduled)
       
-      if (!response.ok) {
-        return 0
+      if (userTimezone) {
+        return gameTime.toLocaleString('en-US', {
+          timeZone: userTimezone,
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })
       }
       
-      const data = await response.json()
-      
-      // Look for rushing yards in the statistics
-      const rushingYards = data.statistics?.find((stat: any) => 
-        stat.name === 'rushingYards' || stat.displayName === 'Rushing Yards'
-      )
-      
-      return parseFloat(rushingYards?.value) || 0
+      return gameTime.toLocaleString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      })
     } catch (error) {
-      console.error(`Error fetching player ${playerId} stats:`, error)
-      return 0
+      console.error('Error formatting game time:', error)
+      return 'TBD'
     }
-  }
-  
-  /**
-   * Get current NFL week and season
-   */
-  static getCurrentWeekAndSeason(): { week: number; season: number } {
-    // Check localStorage first for testing, then fall back to defaults
-    if (typeof window !== 'undefined') {
-      const storedWeek = localStorage.getItem('currentWeek')
-      const storedSeason = localStorage.getItem('currentSeason')
-      if (storedWeek && storedSeason) {
-        return { week: parseInt(storedWeek), season: parseInt(storedSeason) }
-      }
-    }
-    
-    // Default: 2025 season, Week 1 (real current season)
-    const season = 2025
-    const week = 1
-    
-    return { week, season }
-  }
-
-  /**
-   * Set the current week and season for testing
-   */
-  static setCurrentWeekAndSeason(week: number, season: number) {
-    // This would typically update a global state or database
-    // For now, we'll use localStorage for testing
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('currentWeek', week.toString())
-      localStorage.setItem('currentSeason', season.toString())
-    }
-  }
-
-  /**
-   * Get the current week and season (with localStorage fallback for testing)
-   */
-  static getCurrentWeekAndSeasonWithFallback(): { week: number; season: number } {
-    if (typeof window !== 'undefined') {
-      const storedWeek = localStorage.getItem('currentWeek')
-      const storedSeason = localStorage.getItem('currentSeason')
-      if (storedWeek && storedSeason) {
-        return { week: parseInt(storedWeek), season: parseInt(storedSeason) }
-      }
-    }
-    return this.getCurrentWeekAndSeason()
-  }
-
-  /**
-   * Get game time for a team in a specific week
-   */
-  static getGameTimeForTeam(teamAbbr: string, week: number): string | null {
-    // For testing, return a simulated game time
-    const now = new Date()
-    const gameTime = new Date(now.getTime() + (week * 24 * 60 * 60 * 1000)) // Week days in the future
-    gameTime.setHours(13, 0, 0, 0) // 1 PM
-    return gameTime.toISOString()
-  }
-
-  /**
-   * Get opponent for a team in a specific week
-   */
-  static getOpponentForTeam(teamAbbr: string, week: number): string {
-    // For testing, return a simulated opponent
-    const opponents = ['DAL', 'PHI', 'NYG', 'WAS', 'GB', 'CHI', 'MIN', 'DET', 'SF', 'LAR', 'SEA', 'ARI']
-    const opponentIndex = (week + teamAbbr.charCodeAt(0)) % opponents.length
-    return opponents[opponentIndex]
   }
 }

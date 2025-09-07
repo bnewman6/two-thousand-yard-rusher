@@ -9,6 +9,7 @@ export interface NFLPlayerData {
   totalYards: number
   games: number
   weekStats: { [week: number]: number }
+  weekYards?: number // Added for dynamic week data
 }
 
 export const NFL_2023_RUNNING_BACKS: NFLPlayerData[] = [

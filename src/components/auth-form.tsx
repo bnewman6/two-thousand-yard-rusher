@@ -45,10 +45,13 @@ export function AuthForm() {
   const handleSignUp = async (formData: FormData) => {
     setIsLoading(true)
     setError(null)
+    setMessage(null)
 
     const email = formData.get('email') as string
     const password = formData.get('password') as string
     const teamName = formData.get('teamName') as string
+
+    console.log('Starting signup process for:', email, 'with team:', teamName)
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -61,28 +64,43 @@ export function AuthForm() {
         },
       })
 
+      console.log('Signup response:', { data, error })
+
       if (error) {
+        console.error('Signup error:', error)
         setError(error.message)
       } else if (data.user) {
-        // Create profile record
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            email: email,
-            team_name: teamName,
-            total_yards: 0,
-          })
-
-        if (profileError) {
-          console.error('Profile creation error:', profileError)
-          setError('Account created but profile setup failed. Please contact support.')
-        } else {
+        console.log('User created:', data.user)
+        console.log('Email confirmed at:', data.user.email_confirmed_at)
+        
+        // Profile is automatically created by database trigger
+        if (data.user.email_confirmed_at) {
+          // Email already confirmed, redirect to dashboard
           console.log('Sign up successful, redirecting to dashboard...')
           router.push('/dashboard')
+        } else {
+          // Email confirmation required
+          console.log('Email confirmation required, showing message')
+          setMessage('Account created successfully! Please check your email to confirm your account before signing in. You can then sign in with your credentials.')
+          
+          // Let's also check if the profile was created
+          setTimeout(async () => {
+            try {
+              const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', data.user!.id)
+                .single()
+              
+              console.log('Profile check result:', { profileData, profileError })
+            } catch (e) {
+              console.error('Profile check error:', e)
+            }
+          }, 1000)
         }
       }
     } catch (error) {
+      console.error('Unexpected error during signup:', error)
       setError('An unexpected error occurred')
     } finally {
       setIsLoading(false)
@@ -99,7 +117,7 @@ export function AuthForm() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
+          <Tabs defaultValue="signin" className="w-full" onValueChange={() => { setError(null); setMessage(null); }}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
