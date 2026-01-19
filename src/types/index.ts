@@ -4,6 +4,7 @@ export interface User {
   team_name: string
   team_logo_data?: string
   total_yards: number
+  is_admin?: boolean
   created_at: string
   updated_at: string
 }
@@ -93,4 +94,58 @@ export interface WeeklyStats {
   week: number
   topRushers: RunningBack[]
   userPicks: { [userId: string]: WeeklyPick }
+}
+
+// Playoffs Fantasy Types
+export type PlayerPosition = 'QB' | 'RB' | 'WR' | 'TE' | 'K'
+export type PositionSlot = 'QB1' | 'QB2' | 'QB3' | 'RB1' | 'RB2' | 'RB3' | 'WR1' | 'WR2' | 'WR3' | 'WR4' | 'TE1' | 'TE2' | 'K1' | 'K2' | 'FLEX1' | 'FLEX2' | 'FLEX3'
+
+export interface PlayoffPlayer {
+  id: string
+  name: string
+  position: PlayerPosition
+  nfl_team: string
+  eliminated: boolean
+  passing_yds: number
+  passing_td: number
+  int: number
+  rush_yds: number
+  rush_td: number
+  rec: number
+  rec_yds: number
+  rec_td: number
+  fum: number
+  kicking_pts: number
+  tot_pts: number
+  created_at: string
+  updated_at: string
+}
+
+export interface FantasyTeam {
+  id: string
+  user_id: string
+  team_name: string
+  is_locked: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface FantasyTeamPlayer {
+  id: string
+  fantasy_team_id: string
+  player_id: string
+  position_slot: PositionSlot
+  created_at: string
+  player?: PlayoffPlayer
+}
+
+export interface FantasyTeamWithPlayers extends FantasyTeam {
+  players: (FantasyTeamPlayer & { player: PlayoffPlayer })[]
+  total_points: number
+}
+
+export interface PlayoffsLeaderboardEntry {
+  fantasy_team: FantasyTeam
+  total_points: number
+  rank: number
 }

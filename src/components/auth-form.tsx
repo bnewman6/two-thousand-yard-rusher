@@ -33,7 +33,7 @@ export function AuthForm() {
         setError(error.message)
       } else {
         console.log('Sign in successful, redirecting to dashboard...')
-        router.push('/dashboard')
+        router.push('/playoffs/dashboard')
       }
     } catch (error) {
       setError('An unexpected error occurred')
@@ -77,7 +77,7 @@ export function AuthForm() {
         if (data.user.email_confirmed_at) {
           // Email already confirmed, redirect to dashboard
           console.log('Sign up successful, redirecting to dashboard...')
-          router.push('/dashboard')
+          router.push('/playoffs/dashboard')
         } else {
           // Email confirmation required
           console.log('Email confirmation required, showing message')
@@ -111,22 +111,22 @@ export function AuthForm() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Fantasy Football Rush</CardTitle>
-          <CardDescription>
-            Pick one running back each week. Race to 2,000 yards!
+          <CardTitle className="text-2xl font-bold text-gray-900">Playoffs Fantasy Challenge</CardTitle>
+          <CardDescription className="text-gray-700">
+            Build your playoff team of 17 players and compete for the championship!
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full" onValueChange={() => { setError(null); setMessage(null); }}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <TabsTrigger value="signin" className="text-gray-600 data-[state=active]:text-white">Sign In</TabsTrigger>
+              <TabsTrigger value="signup" className="text-gray-600 data-[state=active]:text-white">Sign Up</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
               <form action={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label htmlFor="signin-email" className="text-gray-900">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -134,13 +134,13 @@ export function AuthForm() {
                       name="email"
                       type="email"
                       placeholder="your@email.com"
-                      className="pl-10"
+                      className="pl-10 bg-white text-gray-900 placeholder:text-gray-500"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signin-password">Password</Label>
+                  <Label htmlFor="signin-password" className="text-gray-900">Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -148,12 +148,12 @@ export function AuthForm() {
                       name="password"
                       type="password"
                       placeholder="••••••••"
-                      className="pl-10"
+                      className="pl-10 bg-white text-gray-900 placeholder:text-gray-500"
                       required
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={isLoading}>
                   {isLoading ? 'Signing in...' : 'Sign In'}
                 </Button>
               </form>
@@ -162,7 +162,7 @@ export function AuthForm() {
             <TabsContent value="signup">
               <form action={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
+                  <Label htmlFor="signup-email" className="text-gray-900">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -170,13 +170,13 @@ export function AuthForm() {
                       name="email"
                       type="email"
                       placeholder="your@email.com"
-                      className="pl-10"
+                      className="pl-10 bg-white text-gray-900 placeholder:text-gray-500"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="team-name">Team Name</Label>
+                  <Label htmlFor="team-name" className="text-gray-900">Team Name</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -184,13 +184,13 @@ export function AuthForm() {
                       name="teamName"
                       type="text"
                       placeholder="Your team name"
-                      className="pl-10"
+                      className="pl-10 bg-white text-gray-900 placeholder:text-gray-500"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
+                  <Label htmlFor="signup-password" className="text-gray-900">Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -198,13 +198,13 @@ export function AuthForm() {
                       name="password"
                       type="password"
                       placeholder="••••••••"
-                      className="pl-10"
+                      className="pl-10 bg-white text-gray-900 placeholder:text-gray-500"
                       minLength={6}
                       required
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={isLoading}>
                   {isLoading ? 'Creating account...' : 'Create Account'}
                 </Button>
               </form>

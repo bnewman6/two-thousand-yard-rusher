@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Fantasy Football Rush",
-  description: "Pick one running back each week. Race to 2,000 yards!",
+  title: "Playoffs Fantasy Challenge",
+  description: "Build your playoff team of 17 players and compete for the championship!",
 };
 
 export default function RootLayout({
